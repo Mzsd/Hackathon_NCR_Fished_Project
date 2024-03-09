@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ATM Table</title>
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+    <style>
+        td,
+        th {
+            padding: 5px;
+        }
+        
+        th {
+            cursor: pointer;
+        }
+        /* Custom Switch Styles */
+        
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+        
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #bbb;
+            transition: .4s;
+        }
+        
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+        }
+        
+        input:checked+.slider {
+            background-color: #28a745;
+            /* Green for Normal */
+        }
+        
+        input:focus+.slider {
+            box-shadow: 0 0 1px #28a745;
+            /* Green for Normal */
+        }
+        
+        input:checked+.slider:before {
+            transform: translateX(26px);
+        }
+    </style>
+</head>
+
+<body>
+    <table id="atmTable">
+        <thead>
+            <tr>
+                <th data-sort="Identification">ID</th>
+                <th data-sort="Name">Name</th>
+                <th data-sort="Street">Street</th>
+                <th data-sort="Town">Town</th>
+                <th data-sort="Country">Country</th>
+                <th data-sort="Latitude">Latitude</th>
+                <th data-sort="Longitude">Longitude</th>
+                <th>ATM Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td colspan="8"><i>Loading...</i></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <button id="prevButton">Previous</button>
+    <button id="nextButton">Next</button>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.min.js" integrity="sha384-BBtl+eGJRgqQAUMxJ7pMwbEyER4l1g+O15P+16Ep7Q9Q+zqX6gSbd85u4mG4QzX+" crossorigin="anonymous"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", init, false);
+
+        let data, table, sortCol;
+        let sortAsc = false;
+        const pageSize = 15;
+        let curPage = 1;
+
+        async function init() {
+            // Select the table (well, tbody)
+            table = document.querySelector("#atmTable tbody");
+            // get the ATM data from the JSON file
+            let resp = await fetch("HSBC_atms.json");
+            data = (await resp.json()).data[0].Brand[0].ATM;
+            renderTable();
+
+            // listen for sort clicks
+            document.querySelectorAll("#atmTable thead tr th").forEach((t) => {
+                t.addEventListener("click", sort, false);
+            });
+
+            document
+                .querySelector("#nextButton")
+                .addEventListener("click", nextPage, false);
+            document
+                .querySelector("#prevButton")
+                .addEventListener("click", previousPage, false);
+        }
+
+        function renderTable() {
+            // create HTML
+            let result = "";
+            data
+                .filter((row, index) => {
+                    let start = (curPage - 1) * pageSize;
+                    let end = curPage * pageSize;
+                    if (index >= start && index < end) return true;
+                })
+                .forEach((c) => {
+                    result += `<tr>
+      <td>${c.Identification}</td>
+      <td>${c.Location.Site.Name}</td>
+      <td>${c.Location.PostalAddress.StreetName}</td>
+      <td>${c.Location.PostalAddress.TownName}</td>
+      <td>${c.Location.PostalAddress.Country}</td>
+      <td>${c.Location.PostalAddress.GeoLocation.GeographicCoordinates.Latitude}</td>
+      <td>${c.Location.PostalAddress.GeoLocation.GeographicCoordinates.Longitude}</td>
+      <td>
+        <label class="switch">
+          <input type="checkbox" ${c.Status ? 'checked' : ''} onchange="toggleStatus(${data.indexOf(c)})">
+          <span class="slider"></span>
+        </label>
+      </td>
+     
+    </tr>`;
+                });
+            table.innerHTML = result;
+        }
+
+        function sort(e) {
+            let thisSort = e.target.dataset.sort;
+            if (sortCol === thisSort) sortAsc = !sortAsc;
+            sortCol = thisSort;
+            console.log("sort dir is ", sortAsc);
+            data.sort((a, b) => {
+                if (a[sortCol] < b[sortCol]) return sortAsc ? 1 : -1;
+                if (a[sortCol] > b[sortCol]) return sortAsc ? -1 : 1;
+                return 0;
+            });
+            renderTable();
+        }
+
+        function previousPage() {
+            if (curPage > 1) curPage--;
+            renderTable();
+        }
+
+        function nextPage() {
+            if (curPage * pageSize < data.length) curPage++;
+            renderTable();
+        }
+
+        function toggleStatus(index) {
+            data[index].Status = !data[index].Status;
+
+            renderTable();
+        }
+    </script>
+</body>
+
+</html>
