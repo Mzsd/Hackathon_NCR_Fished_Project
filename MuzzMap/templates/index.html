@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Maps API Example</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-family: Arial, sans-serif;
+        }
+        
+        #map {
+            height: 400px;
+            width: 60%;
+            margin: 20px 0;
+        }
+        
+        #compromisedTable {
+            width: 60%;
+            margin: 20px 0;
+        }
+        
+        #compromisedTable th,
+        #compromisedTable td {
+            padding: 8px;
+            text-align: center;
+        }
+        
+        #filterSection {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        #filterSection label {
+            margin-bottom: 8px;
+        }
+        
+        #filterSection input {
+            margin-bottom: 16px;
+        }
+        /* Modal styles */
+        
+        #pathModal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            z-index: 1;
+        }
+        
+        #closeModalBtn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+    <br>
+    <div>
+        <button onclick="openPathModal()">Route to Compromised ATMs</button>
+    </div>
+    <div id="pathModal">
+        <span id="closeModalBtn" onclick="closePathModal()">Close</span>
+        <div id="filterSection">
+            <label for="startingLocation">Starting Location:</label>
+            <input type="text" id="startingLocation" value="Dundee">
+            <label for="startingCoordinates">Starting Coordinates:</label>
+            <div>
+                <input type="text" id="latitude" value="56.4620">
+                <input type="text" id="longitude" value="-2.9707">
+            </div>
+
+        </div>
+        <div>
+            <button id="generateRouteBtn" onclick="checkCompromised()">Generate Route</button>
+        </div>
+        <div id="compromisedTableContainer"></div>
+    </div>
+
+    <script>
+        function openPathModal() {
+            document.getElementById('pathModal').style.display = 'block';
+            showCompromisedTable();
+        }
+
+        function closePathModal() {
+            document.getElementById('pathModal').style.display = 'none';
+        }
+
+        function checkCompromised() {
+            // Send AJAX request to Flask server
+            var xhr = new XMLHttpRequest();
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === XMLHttpRequest.DONE) {
+                    if (xhr.status === 200) {
+                        // Parse the response JSON
+                        var response = JSON.parse(xhr.responseText);
+
+                        // Extract ATM locations from the response
+                        var atmLocations = response.compromised_atms.map(atm => ({
+                            latitude: atm.Latitude,
+                            longitude: atm.Longitude
+                        }));
+
+                        // Call the generateRoute function with the extracted ATM locations
+                        generateRoute(atmLocations);
+                    } else {
+                        console.error('Error:', xhr.status, xhr.statusText);
+                    }
+                }
+            };
+            xhr.open('GET', '/check_compromised', true);
+            xhr.send();
+        }
+
+
+        async function generateRoute(atmLocations) {
+            // Get values from the input fields
+            var startingLocation = document.getElementById('startingLocation').value;
+            var latitude = parseFloat(document.getElementById('latitude').value);
+            var longitude = parseFloat(document.getElementById('longitude').value);
+
+            // Create a JSON object with engineer_location and atm_locations
+            var postData = {
+                engineer_location: startingLocation,
+                atm_locations: {
+                    [startingLocation]: {
+                        latitude: latitude,
+                        longitude: longitude
+                    },
+                    compromised_atms: atmLocations
+                }
+            };
+
+            // Make a POST request to the Flask route
+            var xhr = new XMLHttpRequest();
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === XMLHttpRequest.DONE) {
+                    if (xhr.status === 200) {
+                        console.log(xhr.responseText); // Print the response to the console
+                        // Handle the response if needed
+                    } else {
+                        console.error('Error:', xhr.status, xhr.statusText);
+                    }
+                }
+            };
+            xhr.open('POST', '/generate_route', true);
+            xhr.setRequestHeader('Content-Type', 'application/json;charset=UTF-8');
+            xhr.send(postData);
+        }
+
+
+
+        var markers = []; // Declare markers outside the initMap function
+
+        async function initMap() {
+            var mapOptions = {
+                center: {
+                    lat: 55.3781,
+                    lng: -3.4360
+                }, // UK coordinates
+                zoom: 4, // Adjust the initial zoom level as needed
+            };
+
+            var map = new google.maps.Map(document.getElementById('map'), mapOptions);
+
+            // Fetch ATM data from the local server
+            let resp = await fetch("/data");
+            let data = await resp.json();
+            let atms = data[0].Brand[0].ATM;
+
+            // Create markers for each ATM when zoom level is 6 or higher
+            if (map.getZoom() >= 10) {
+                atms.forEach(atm => {
+                    let lat = parseFloat(atm.Location.PostalAddress.GeoLocation.GeographicCoordinates.Latitude);
+                    let lng = parseFloat(atm.Location.PostalAddress.GeoLocation.GeographicCoordinates.Longitude);
+
+                    markers.push(new google.maps.Marker({
+                        position: {
+                            lat: lat,
+                            lng: lng
+                        },
+                        map: map
+                    }));
+                });
+            } else {
+                // Create dots for each ATM when zoom level is less than 6
+                atms.forEach(atm => {
+                    let lat = parseFloat(atm.Location.PostalAddress.GeoLocation.GeographicCoordinates.Latitude);
+                    let lng = parseFloat(atm.Location.PostalAddress.GeoLocation.GeographicCoordinates.Longitude);
+
+                    markers.push(new google.maps.Circle({
+                        strokeColor: '#FF0000',
+                        strokeOpacity: 0.8,
+                        strokeWeight: 2,
+                        fillColor: '#FF0000',
+                        fillOpacity: 0.8,
+                        map: map,
+                        center: {
+                            lat: lat,
+                            lng: lng
+                        },
+                        radius: 500, // Adjust the radius of the dot as needed
+                    }));
+                });
+            }
+
+            // Add an event listener to check for zoom changes
+            google.maps.event.addListener(map, 'zoom_changed', function() {
+                // Update the markers/dots based on the new zoom level
+                if (map.getZoom() >= 10) {
+                    // Remove existing circles
+                    for (var i = 0; i < markers.length; i++) {
+                        markers[i].setMap(null);
+                    }
+                    // Create markers
+                    atms.forEach(atm => {
+                        let lat = parseFloat(atm.Location.PostalAddress.GeoLocation.GeographicCoordinates.Latitude);
+                        let lng = parseFloat(atm.Location.PostalAddress.GeoLocation.GeographicCoordinates.Longitude);
+
+                        markers.push(new google.maps.Marker({
+                            position: {
+                                lat: lat,
+                                lng: lng
+                            },
+                            map: map
+                        }));
+                    });
+                } else {
+                    // Remove existing markers
+                    for (var i = 0; i < markers.length; i++) {
+                        markers[i].setMap(null);
+                    }
+                    // Create dots
+                    atms.forEach(atm => {
+                        let lat = parseFloat(atm.Location.PostalAddress.GeoLocation.GeographicCoordinates.Latitude);
+                        let lng = parseFloat(atm.Location.PostalAddress.GeoLocation.GeographicCoordinates.Longitude);
+
+                        markers.push(new google.maps.Circle({
+                            strokeColor: '#FF0000',
+                            strokeOpacity: 0.8,
+                            strokeWeight: 2,
+                            fillColor: '#FF0000',
+                            fillOpacity: 0.8,
+                            map: map,
+                            center: {
+                                lat: lat,
+                                lng: lng
+                            },
+                            radius: 500, // Adjust the radius of the dot as needed
+                        }));
+                    });
+                }
+            });
+        }
+
+        function showCompromisedTable() {
+            // Get values from the input fields
+            var startingLocation = document.getElementById('startingLocation').value;
+            var latitude = document.getElementById('latitude').value;
+            var longitude = document.getElementById('longitude').value;
+
+            // Clear the compromisedTableContainer
+            document.getElementById('compromisedTableContainer').innerHTML = '';
+
+            // Create the table
+            var table = document.createElement('table');
+            table.id = 'compromisedTable';
+            var thead = table.createTHead();
+            var row = thead.insertRow();
+            var headings = ['ATM ID', 'Site', 'Latitude', 'Longitude'];
+            headings.forEach(heading => {
+                var th = document.createElement('th');
+                th.textContent = heading;
+                row.appendChild(th);
+            });
+
+            // Fetch ATM data from the Flask server
+            var xhr = new XMLHttpRequest();
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === XMLHttpRequest.DONE) {
+                    if (xhr.status === 200) {
+                        var compromisedData = JSON.parse(xhr.responseText).compromised_atms;
+                        compromisedData.forEach(data => {
+                            // Create a row for each compromised ATM
+                            var row = table.insertRow();
+                            var cell1 = row.insertCell(0);
+                            var cell2 = row.insertCell(1);
+                            var cell3 = row.insertCell(2);
+                            var cell4 = row.insertCell(3);
+                            cell1.textContent = data.Identification;
+                            cell2.textContent = data.Location;
+                            cell3.textContent = data.Latitude;
+                            cell4.textContent = data.Longitude;
+                        });
+
+                        // Append the table to the compromisedTableContainer
+                        document.getElementById('compromisedTableContainer').appendChild(table);
+                    } else {
+                        console.error('Error:', xhr.status, xhr.statusText);
+                    }
+                }
+            };
+            xhr.open('GET', '/check_compromised', true);
+            xhr.send();
+        }
+    </script>
+
+
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD32bveBrwe-P40Q-cOTvc3NJPz2rF_j_I&loading=async&callback=initMap" async defer></script>
+</body>
+
+
+
+</html>
