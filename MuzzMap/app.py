@@ -7,7 +7,7 @@ import math
 app = Flask(__name__)
 
 # Replace 'YOUR_API_KEY' with your actual Google Maps API key
-google_maps_api_key = 'AIzaSyD32bveBrwe-P40Q-cOTvc3NJPz2rF_j_I'
+google_maps_api_key = '<google-api>'
 # Connect to MongoDB
 client = MongoClient('mongodb://root:example@localhost:27017/')
 db = client['ncr_atms']
