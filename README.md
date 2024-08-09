@@ -30,7 +30,7 @@ Solution
 -   **Frontend:** Bootstrap
 -   **Real-time Data Streaming:** json-server
 -   **Data Storage:** MongoDB
--   **Map Visualization:** Google Maps API
+-   **Map Visualization:** Google Maps API + Leaflet JS
 -   **Distance Computation:** Nearest Neighbor algorithm
 
 ### Map Integration
